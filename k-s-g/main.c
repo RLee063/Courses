@@ -1,8 +1,14 @@
 #include "stdio.h"
 
-int main(){
-    printf("hello\n");
-    char tmp[] = "123";
+void vul(){
+    printf("Somthing plz:\n> ");
+    char tmp[] = "pwn";
     scanf("%s", tmp);
+}
+
+int main(){
+    while(1){
+        vul();
+    }
     return 0;
 }
