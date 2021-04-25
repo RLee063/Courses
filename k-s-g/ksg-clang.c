@@ -10,8 +10,8 @@ int main(int argc, char *argv[]){
     argvv[i++] = "-Xclang";
     argvv[i++] = "-load";
     argvv[i++] = "-Xclang";
-    argvv[i++] = "./libksg-llvm-pass.so";
-    argvv[i++] = "-L.";
+    argvv[i++] = "/usr/local/lib/libksg-llvm-pass.so";
+    argvv[i++] = "-L/usr/local/lib";
     argvv[i++] = "-lksg-stack-guard";
     argvv[i] = NULL;
     execv("/bin/clang", argvv);

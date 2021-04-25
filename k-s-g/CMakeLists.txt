@@ -25,3 +25,17 @@ add_library(ksg-stack-guard STATIC
 
 # ksg-clang
 add_executable(ksg-clang ksg-clang.c)
+
+# For install
+
+install(TARGETS ksg-clang
+    DESTINATION bin
+    )
+
+install(TARGETS ksg-llvm-pass
+    DESTINATION lib
+    )
+
+install(TARGETS ksg-stack-guard 
+    DESTINATION lib
+    )
