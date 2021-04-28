@@ -11,18 +11,13 @@ if(NOT DEFINED ENV{UV_LIBRARY_DIRS})
     set(ENV{UV_LIBRARY_PATH} "/usr/local/lib/libuv.so")
 endif()
 
-add_executable(knDNS knDNS.c)
+add_executable(knDNS src/knDNS.c)
 
 target_include_directories(knDNS
     PRIVATE $ENV{UV_INCLUDE_DIRS}
+    PRIVATE ${PROJECT_SOURCE_DIR}/include
     )
 
 target_link_libraries(knDNS
     PRIVATE $ENV{UV_LIBRARY_PATH}
     )
-
-# # For install
-# 
-# install(TARGETS knDNS
-#     DESTINATION bin
-#     )
