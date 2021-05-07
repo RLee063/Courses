@@ -1,4 +1,9 @@
+#include <bits/stdint-uintn.h>
 #include <llvm-10/llvm/IR/BasicBlock.h>
+#include <llvm-10/llvm/IR/Constants.h>
+#include <llvm-10/llvm/IR/DerivedTypes.h>
+#include <llvm-10/llvm/IR/GlobalVariable.h>
+#include <llvm-10/llvm/Support/Casting.h>
 #include <string>
 #include <system_error>
 #include <iostream>
@@ -18,38 +23,66 @@ struct MyPlacementPass : public FunctionPass
 {
     static char ID;
     MyPlacementPass() : FunctionPass(ID){}
+    GlobalVariable * gcanary = NULL;
+
+    bool containsArray(Function &F){
+        for (const BasicBlock &BB : F){
+            for (const Instruction &I : BB){
+                if (const AllocaInst *AI = dyn_cast<AllocaInst>(&I)) {
+                    if (ArrayType * AT = dyn_cast<ArrayType>(AI->getAllocatedType())){
+                        return true;
+                    } 
+                }
+            }
+        }
+        return false;
+    }
 
     bool runOnFunction(Function &F) override
     {
+        LLVMContext &context = F.getParent()->getContext();
+        if (!gcanary){
+            gcanary = new GlobalVariable(*F.getParent(), Type::getInt32Ty(F.getParent()->getContext()), false, GlobalValue::ExternalLinkage, NULL, "__kss_canary");
+        }
         if (F.getName().startswith("__kss"))
         {
             return false;
         }
-        printf("[+] Implementation @ %s.\n", F.getName().str().c_str());
-        LLVMContext &context = F.getParent()->getContext();
+        if (containsArray(F)){
+            printf("[+] Implemente @ %s.\n", F.getName().str().c_str());
 
-        FunctionType *type = FunctionType::get(Type::getInt32Ty(context), {}, false);
-        FunctionCallee get_canay_func = F.getParent()->getOrInsertFunction("__kss_get_canary", type);
-        IRBuilder<> builder_entry(&F.getEntryBlock().front());
-        AllocaInst * canary_slot = builder_entry.CreateAlloca(Type::getInt32Ty(context));
-        Value * canary = builder_entry.CreateCall(get_canay_func, {});
-        builder_entry.CreateStore(canary, canary_slot); 
+            // FunctionType *type = FunctionType::get(Type::getInt32Ty(context), {}, false);
+            // FunctionCallee get_canay_func = F.getParent()->getOrInsertFunction("__kss_get_canary", type);
+            // Value * canary = builder_entry.CreateCall(get_canay_func, {});
+            IRBuilder<> builder_entry(&F.getEntryBlock().front());
+            AllocaInst * canary_slot = builder_entry.CreateAlloca(Type::getInt32Ty(context));
+            Value * t1 = builder_entry.CreateLoad(Type::getInt32Ty(context), gcanary, true);
+            builder_entry.CreateStore(t1, canary_slot); 
 
-        for (Function::iterator I = F.begin(), E = F.end(); I != E; ++I)
-        {
-            BasicBlock &BB = *I;
-            for (BasicBlock::iterator I = BB.begin(), E = BB.end(); I != E; ++I)
+            for (Function::iterator I = F.begin(), E = F.end(); I != E; ++I)
             {
-                ReturnInst *IST = dyn_cast<ReturnInst>(I);
-                if (IST)
+                BasicBlock &BB = *I;
+                for (BasicBlock::iterator I = BB.begin(), E = BB.end(); I != E; ++I)
                 {
-                    FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt32Ty(context)}, false);
-                    FunctionCallee canary_check = BB.getModule()->getOrInsertFunction("__kss_stack_chk", type);
-                    IRBuilder<> builder_epilogue(IST);
-                    canary = builder_epilogue.CreateLoad(Type::getInt32Ty(context), canary_slot, true);
-                    builder_epilogue.CreateCall(canary_check, {canary});
+                    ReturnInst *IST = dyn_cast<ReturnInst>(I);
+                    if (IST)
+                    {
+                        FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt32Ty(context)}, false);
+                        FunctionCallee canary_check = BB.getModule()->getOrInsertFunction("__kss_stack_chk", type);
+                        IRBuilder<> builder_epilogue(IST);
+                        Value *t2 = builder_epilogue.CreateLoad(Type::getInt32Ty(context), canary_slot, true);
+                        builder_epilogue.CreateCall(canary_check, {t2});
+                    }
                 }
             }
+        }
+        if (F.getName().str() == "main")
+        { 
+            FunctionType *type = FunctionType::get(Type::getInt32Ty(context), {}, false);
+            FunctionCallee get_canay_func = F.getParent()->getOrInsertFunction("__kss_get_canary", type);
+            IRBuilder<> builder_init(&F.getEntryBlock().front());
+            Value * canary = builder_init.CreateCall(get_canay_func, {});
+            builder_init.CreateStore(canary, gcanary);
         }
         return false;
     }
