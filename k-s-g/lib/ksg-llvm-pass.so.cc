@@ -44,7 +44,6 @@ struct MyPlacementPass : public FunctionPass
         BasicBlock *FailBB = BasicBlock::Create(context, "", &F);
         IRBuilder<> builder_fail(FailBB);
         FunctionType *type = FunctionType::get(Type::getVoidTy(context), {}, false);
-        // FunctionCallee canary_check_fail = F.getParent()->getOrInsertFunction("__kss_stack_chk_fail", Type::getVoidTy(context));
         FunctionCallee canary_check_fail = F.getParent()->getOrInsertFunction("__kss_stack_chk_fail", type);
         builder_fail.CreateCall(canary_check_fail, {});
         builder_fail.CreateUnreachable();
@@ -64,9 +63,6 @@ struct MyPlacementPass : public FunctionPass
         if (containsArray(F)){
             printf("[+] Implemente @ %s.\n", F.getName().str().c_str());
 
-            // FunctionType *type = FunctionType::get(Type::getInt32Ty(context), {}, false);
-            // FunctionCallee get_canay_func = F.getParent()->getOrInsertFunction("__kss_get_canary", type);
-            // Value * canary = builder_entry.CreateCall(get_canay_func, {});
             IRBuilder<> builder_entry(&F.getEntryBlock().front());
             AllocaInst * canary_slot = builder_entry.CreateAlloca(Type::getInt32Ty(context));
             Value * t1 = builder_entry.CreateLoad(Type::getInt32Ty(context), gcanary, true);
@@ -89,9 +85,6 @@ struct MyPlacementPass : public FunctionPass
                     Value *canary_global = builder_epilogue.CreateLoad(Type::getInt32Ty(context), gcanary, true);
                     Value *Cmp = builder_epilogue.CreateICmpEQ(canary_local, canary_global);
                     builder_epilogue.CreateCondBr(Cmp, NewBB, FailBB);
-
-                    // Value *t2 = builder_epilogue.CreateLoad(Type::getInt32Ty(context), canary_slot, true);
-                    // builder_epilogue.CreateCall(canary_check, {t2});
                 }
             }
         }
@@ -101,7 +94,6 @@ struct MyPlacementPass : public FunctionPass
             FunctionCallee get_canay_func = F.getParent()->getOrInsertFunction("__kss_get_canary", type);
             IRBuilder<> builder_init(&F.getEntryBlock().front());
             builder_init.CreateCall(get_canay_func, {});
-            //builder_init.CreateStore(canary, gcanary);
         }
         return false;
     }
