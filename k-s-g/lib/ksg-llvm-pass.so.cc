@@ -2,6 +2,7 @@
 #include <llvm-10/llvm/IR/BasicBlock.h>
 #include <llvm-10/llvm/IR/Constants.h>
 #include <llvm-10/llvm/IR/DerivedTypes.h>
+#include <llvm-10/llvm/IR/GlobalValue.h>
 #include <llvm-10/llvm/IR/GlobalVariable.h>
 #include <llvm-10/llvm/Support/Casting.h>
 #include <string>
@@ -38,6 +39,18 @@ struct MyPlacementPass : public FunctionPass
         return false;
     }
 
+    BasicBlock * getFailBB(Function &F){
+        LLVMContext &context = F.getContext();
+        BasicBlock *FailBB = BasicBlock::Create(context, "", &F);
+        IRBuilder<> builder_fail(FailBB);
+        FunctionType *type = FunctionType::get(Type::getVoidTy(context), {}, false);
+        // FunctionCallee canary_check_fail = F.getParent()->getOrInsertFunction("__kss_stack_chk_fail", Type::getVoidTy(context));
+        FunctionCallee canary_check_fail = F.getParent()->getOrInsertFunction("__kss_stack_chk_fail", type);
+        builder_fail.CreateCall(canary_check_fail, {});
+        builder_fail.CreateUnreachable();
+        return FailBB;
+    }
+
     bool runOnFunction(Function &F) override
     {
         LLVMContext &context = F.getParent()->getContext();
@@ -59,30 +72,36 @@ struct MyPlacementPass : public FunctionPass
             Value * t1 = builder_entry.CreateLoad(Type::getInt32Ty(context), gcanary, true);
             builder_entry.CreateStore(t1, canary_slot); 
 
-            for (Function::iterator I = F.begin(), E = F.end(); I != E; ++I)
+            for (Function::iterator I = F.begin(), E = F.end(); I != E;)
             {
-                BasicBlock &BB = *I;
-                for (BasicBlock::iterator I = BB.begin(), E = BB.end(); I != E; ++I)
+                BasicBlock &BB = *I++;
+                ReturnInst *IST = dyn_cast<ReturnInst>(BB.getTerminator());
+                if (IST)
                 {
-                    ReturnInst *IST = dyn_cast<ReturnInst>(I);
-                    if (IST)
-                    {
-                        FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt32Ty(context)}, false);
-                        FunctionCallee canary_check = BB.getModule()->getOrInsertFunction("__kss_stack_chk", type);
-                        IRBuilder<> builder_epilogue(IST);
-                        Value *t2 = builder_epilogue.CreateLoad(Type::getInt32Ty(context), canary_slot, true);
-                        builder_epilogue.CreateCall(canary_check, {t2});
-                    }
+                    BasicBlock *FailBB = getFailBB(F);
+
+                    BasicBlock *NewBB = BB.splitBasicBlock(IST->getIterator());
+                    BB.getTerminator()->eraseFromParent();
+                    NewBB->moveAfter(&BB);
+
+                    IRBuilder<> builder_epilogue(&BB);
+                    Value *canary_local = builder_epilogue.CreateLoad(Type::getInt32Ty(context), canary_slot, true);
+                    Value *canary_global = builder_epilogue.CreateLoad(Type::getInt32Ty(context), gcanary, true);
+                    Value *Cmp = builder_epilogue.CreateICmpEQ(canary_local, canary_global);
+                    builder_epilogue.CreateCondBr(Cmp, NewBB, FailBB);
+
+                    // Value *t2 = builder_epilogue.CreateLoad(Type::getInt32Ty(context), canary_slot, true);
+                    // builder_epilogue.CreateCall(canary_check, {t2});
                 }
             }
         }
         if (F.getName().str() == "main")
         { 
-            FunctionType *type = FunctionType::get(Type::getInt32Ty(context), {}, false);
+            FunctionType *type = FunctionType::get(Type::getVoidTy(context), {}, false);
             FunctionCallee get_canay_func = F.getParent()->getOrInsertFunction("__kss_get_canary", type);
             IRBuilder<> builder_init(&F.getEntryBlock().front());
-            Value * canary = builder_init.CreateCall(get_canay_func, {});
-            builder_init.CreateStore(canary, gcanary);
+            builder_init.CreateCall(get_canay_func, {});
+            //builder_init.CreateStore(canary, gcanary);
         }
         return false;
     }
