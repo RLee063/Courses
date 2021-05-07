@@ -4,7 +4,7 @@ ksg, short for k1ll3r-stack-guard, is a little small and tiny util for adding `c
 
 ## Details
 
-* Only implement those functions with array.
+* Only guard those functions which own array.
 * All implementations trying presented through inline.
 
 ## Build & Install
