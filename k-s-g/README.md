@@ -2,9 +2,14 @@
 
 ksg, short for k1ll3r-stack-guard, is a little small and tiny util for adding `canary`.
 
+## Details
+
+* Only implement those functions with array.
+* All implementations trying presented through inline.
+
 ## Build & Install
 
-Target x84(-64) support was integrated in default, if you want to try somthing on other arch, see [Example Plus](#example-plus).
+Target x84(-64) support was integrated in default, if you want to try somthing on other archs, see [Example Plus](#example-plus).
 
 ```Shell
 mkdir build
@@ -13,11 +18,6 @@ cmake ..
 make
 sudo make install
 ```
-
-## Details
-
-* Only implement these functions whth array.
-* All implementations trying presented through inline.
 
 ## Example
 
